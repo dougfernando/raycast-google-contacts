@@ -1,0 +1,49 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "google-contacts",
+  "title": "Google Contacts",
+  "description": "Access and manage your Google Contacts",
+  "icon": "command-icon.png",
+  "author": "chudu",
+  "categories": [
+    "Productivity"
+  ],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "search-contacts",
+      "title": "Search Contacts",
+      "description": "Search through your Google Contacts",
+      "mode": "view",
+      "main": "search-contacts.js"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "googleClientId",
+      "type": "password",
+      "required": true,
+      "title": "Google OAuth Client ID",
+      "description": "Your Google OAuth 2.0 Client ID from Google Cloud Console"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.64.0",
+    "googleapis": "^126.0.1"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "1.0.6",
+    "@types/node": "20.8.10",
+    "@types/react": "18.2.27",
+    "eslint": "^8.51.0",
+    "prettier": "^3.0.3",
+    "typescript": "^5.2.2"
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint",
+    "publish": "npx @raycast/api@latest publish"
+  }
+}
