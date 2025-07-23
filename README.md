@@ -8,7 +8,7 @@ A Raycast extension to search and manage your Google Contacts directly from Rayc
 - 👤 View detailed contact information
 - 📧 Quick email actions
 - 📞 Copy phone numbers to clipboard
-- 🔄 Real-time search with Google People API
+- 🔄 Real-time search using Google People API
 - 🔐 Secure OAuth authentication
 
 ## Setup
@@ -19,7 +19,7 @@ A Raycast extension to search and manage your Google Contacts directly from Rayc
 2. Create a new project or select an existing one
 3. Enable the **People API**:
    - Navigate to APIs & Services > Library
-   - Search for "People API"
+   - Search for "People API" (this is the current API for Google Contacts)
    - Click on it and enable it
 4. Create OAuth 2.0 credentials:
    - Go to APIs & Services > Credentials
