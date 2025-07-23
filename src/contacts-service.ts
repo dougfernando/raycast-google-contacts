@@ -1,4 +1,4 @@
-import { people_v1 } from "googleapis";
+import { people_v1 } from "@googleapis/people";
 import { Contact } from "./types";
 import { createPeopleService } from "./google-auth";
 
@@ -13,7 +13,7 @@ export class ContactsService {
     try {
       const response = await this.peopleService.people.connections.list({
         resourceName: "people/me",
-        personFields: "names,emailAddresses,phoneNumbers,photos",
+        personFields: "names,emailAddresses,phoneNumbers,photos,addresses,organizations,urls,birthdays",
         pageSize: 1000,
         sortOrder: "FIRST_NAME_ASCENDING",
       });
@@ -29,11 +29,13 @@ export class ContactsService {
     try {
       const response = await this.peopleService.people.searchContacts({
         query,
-        readMask: "names,emailAddresses,phoneNumbers,photos",
+        readMask: "names,emailAddresses,phoneNumbers,photos,addresses,organizations,urls,birthdays",
         pageSize: 50,
       });
 
-      return this.transformContacts(response.data.results?.map(r => r.person) || []);
+      return this.transformContacts(
+        response.data.results?.map((r) => r.person) || []
+      );
     } catch (error) {
       console.error("Error searching contacts:", error);
       throw new Error("Failed to search contacts");
@@ -46,14 +48,52 @@ export class ContactsService {
       .map((person) => ({
         id: person.resourceName || "",
         name: person.names?.[0]?.displayName || "Unknown",
-        emails: person.emailAddresses?.map((email) => ({
-          value: email.value || "",
-          type: email.type || "unknown",
-        })) || [],
-        phoneNumbers: person.phoneNumbers?.map((phone) => ({
-          value: phone.value || "",
-          type: phone.type || "unknown",
-        })) || [],
+        emails:
+          person.emailAddresses?.map((email) => ({
+            value: email.value || "",
+            type: email.type || "unknown",
+          })) || [],
+        phoneNumbers:
+          person.phoneNumbers?.map((phone) => ({
+            value: phone.value || "",
+            type: phone.type || "unknown",
+          })) || [],
+        addresses:
+          person.addresses?.map((address) => ({
+            formattedValue: address.formattedValue || "",
+            type: address.type || "unknown",
+            streetAddress: address.streetAddress,
+            city: address.city,
+            region: address.region,
+            postalCode: address.postalCode,
+            country: address.country,
+          })) || [],
+        organizations:
+          person.organizations?.map((org) => ({
+            name: org.name || "",
+            title: org.title,
+            type: org.type || "unknown",
+          })) || [],
+        urls:
+          person.urls?.map((url) => ({
+            value: url.value || "",
+            type: url.type || "unknown",
+          })) || [],
+        birthdays:
+          person.birthdays?.map((birthday) => {
+            const date = birthday.date;
+            let dateString = "";
+            if (date?.month && date?.day) {
+              dateString = `${date.month}/${date.day}`;
+              if (date.year) {
+                dateString += `/${date.year}`;
+              }
+            }
+            return {
+              date: dateString,
+              text: birthday.text,
+            };
+          }) || [],
         photoUrl: person.photos?.[0]?.url,
       }));
   }

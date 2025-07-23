@@ -1,34 +1,100 @@
 import { OAuth, getPreferenceValues } from "@raycast/api";
-import { google } from "googleapis";
+import { people } from "@googleapis/people";
+import { OAuth2Client } from "google-auth-library";
 
 interface Preferences {
   googleClientId: string;
+  googleClientSecret: string;
 }
 
-const GOOGLE_SCOPES = "https://www.googleapis.com/auth/contacts.readonly";
+const oauthClient = new OAuth.PKCEClient({
+  redirectMethod: OAuth.RedirectMethod.Web,
+  providerName: "Google",
+  providerIcon: "google-logo.png",
+  providerId: "google",
+  description: "Connect your Google account to access your contacts",
+});
 
-let oauthClient: OAuth.PKCEClient | null = null;
+export async function authorize(): Promise<string> {
+  console.log("AUTH: Starting authorization...");
+  const preferences = getPreferenceValues<Preferences>();
+  const clientId = preferences.googleClientId;
 
-function getOAuthClient(): OAuth.PKCEClient {
-  if (!oauthClient) {
-    oauthClient = new OAuth.PKCEClient({
-      redirectMethod: OAuth.RedirectMethod.Web,
-      providerName: "Google",
-      providerIcon: "google-logo.png",
-      providerId: "google",
-      description: "Connect your Google account to access your contacts",
-    });
+  // Check for existing tokens first
+  console.log("AUTH: Checking for existing tokens...");
+  const tokenSet = await oauthClient.getTokens();
+  if (tokenSet?.accessToken) {
+    console.log("AUTH: Found existing token, checking if expired...");
+    if (tokenSet.refreshToken && tokenSet.isExpired()) {
+      console.log("AUTH: Token expired, refreshing...");
+      const tokens = await refreshTokens(tokenSet.refreshToken, clientId);
+      await oauthClient.setTokens(tokens);
+      return tokens.access_token;
+    }
+    console.log("AUTH: Using existing valid token");
+    return tokenSet.accessToken;
   }
-  return oauthClient;
+
+  console.log("AUTH: No existing tokens, starting new authorization...");
+
+  try {
+    // Create authorization request
+    console.log("AUTH: Creating authorization request...");
+    const authRequest = await oauthClient.authorizationRequest({
+      endpoint: "https://accounts.google.com/o/oauth2/v2/auth",
+      clientId: clientId,
+      scope: "https://www.googleapis.com/auth/contacts.readonly",
+      extraParameters: {
+        redirect_uri: "https://raycast.com/redirect/extension",
+      },
+    });
+
+    // Add client ID to authRequest since it's not automatically included
+    (authRequest as any).clientId = clientId;
+    
+    // Ensure redirect URI is correctly set for token exchange
+    (authRequest as any).redirectURI = "https://raycast.com/redirect/extension";
+
+    console.log("AUTH: Authorization request created, calling authorize...");
+    console.log("AUTH: Auth URL being used:", authRequest.toURL ? authRequest.toURL() : "No URL available");
+    console.log("AUTH: Redirect URI in request:", authRequest.redirectURI);
+    
+    const { authorizationCode } = await oauthClient.authorize(authRequest);
+
+    console.log("AUTH: Got authorization code, fetching tokens...");
+    const tokens = await fetchTokens(authRequest, authorizationCode);
+
+    console.log("AUTH: Tokens received, storing...");
+    await oauthClient.setTokens(tokens);
+
+    console.log("AUTH: Authorization complete!");
+    return tokens.access_token;
+  } catch (error) {
+    console.error("AUTH: Authorization failed:", error);
+    throw error;
+  }
 }
 
-async function fetchTokens(request: OAuth.AuthorizationRequest, authCode: string): Promise<OAuth.TokenResponse> {
+async function fetchTokens(
+  request: OAuth.AuthorizationRequest,
+  authCode: string
+): Promise<OAuth.TokenResponse> {
+  const preferences = getPreferenceValues<Preferences>();
   const params = new URLSearchParams();
   params.append("client_id", request.clientId);
+  params.append("client_secret", preferences.googleClientSecret);
   params.append("code", authCode);
   params.append("code_verifier", request.codeVerifier);
   params.append("grant_type", "authorization_code");
   params.append("redirect_uri", request.redirectURI);
+
+  console.log("AUTH: Token exchange parameters:", {
+    client_id: request.clientId ? "Present" : "Missing",
+    client_secret: preferences.googleClientSecret ? "Present" : "Missing",
+    code: authCode ? "Present" : "Missing",
+    code_verifier: request.codeVerifier ? "Present" : "Missing",
+    redirect_uri: request.redirectURI,
+  });
 
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -37,15 +103,25 @@ async function fetchTokens(request: OAuth.AuthorizationRequest, authCode: string
   });
 
   if (!response.ok) {
-    throw new Error(`OAuth token exchange failed: ${response.statusText}`);
+    const errorText = await response.text();
+    console.error("Token fetch failed:", response.status, response.statusText);
+    console.error("Error response:", errorText);
+    throw new Error(
+      `Failed to fetch OAuth tokens: ${response.statusText} - ${errorText}`
+    );
   }
 
   return (await response.json()) as OAuth.TokenResponse;
 }
 
-async function refreshTokens(refreshToken: string, clientId: string): Promise<OAuth.TokenResponse> {
+async function refreshTokens(
+  refreshToken: string,
+  clientId: string
+): Promise<OAuth.TokenResponse> {
+  const preferences = getPreferenceValues<Preferences>();
   const params = new URLSearchParams();
   params.append("client_id", clientId);
+  params.append("client_secret", preferences.googleClientSecret);
   params.append("refresh_token", refreshToken);
   params.append("grant_type", "refresh_token");
 
@@ -56,42 +132,26 @@ async function refreshTokens(refreshToken: string, clientId: string): Promise<OA
   });
 
   if (!response.ok) {
-    throw new Error(`OAuth token refresh failed: ${response.statusText}`);
+    console.error(
+      "Token refresh failed:",
+      response.status,
+      response.statusText
+    );
+    throw new Error(`Failed to refresh OAuth tokens: ${response.statusText}`);
   }
 
   return (await response.json()) as OAuth.TokenResponse;
 }
 
-export async function authorize(): Promise<string> {
-  const preferences = getPreferenceValues<Preferences>();
-  const client = getOAuthClient();
-  
-  const tokenSet = await client.getTokens();
-  if (tokenSet?.accessToken) {
-    if (tokenSet.refreshToken && tokenSet.isExpired()) {
-      const newTokens = await refreshTokens(tokenSet.refreshToken, preferences.googleClientId);
-      await client.setTokens(newTokens);
-      return newTokens.access_token;
-    }
-    return tokenSet.accessToken;
-  }
-
-  const authRequest = await client.authorizationRequest({
-    endpoint: "https://accounts.google.com/o/oauth2/v2/auth",
-    clientId: preferences.googleClientId,
-    scope: GOOGLE_SCOPES,
+export function createPeopleService(accessToken: string) {
+  // Create an OAuth2 client with the access token
+  const authClient = new OAuth2Client();
+  authClient.setCredentials({
+    access_token: accessToken,
   });
 
-  const { authorizationCode } = await client.authorize(authRequest);
-  const tokens = await fetchTokens(authRequest, authorizationCode);
-  await client.setTokens(tokens);
-
-  return tokens.access_token;
-}
-
-export function createPeopleService(accessToken: string) {
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: accessToken });
-  
-  return google.people({ version: "v1", auth });
+  return people({
+    version: "v1",
+    auth: authClient,
+  });
 }

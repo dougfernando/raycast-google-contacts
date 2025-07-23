@@ -9,7 +9,9 @@
 
 type ExtensionPreferences = {
   /** Google OAuth Client ID - Your Google OAuth 2.0 Client ID from Google Cloud Console */
-  "googleClientId": string
+  "googleClientId": string,
+  /** Google OAuth Client Secret - Your Google OAuth 2.0 Client Secret from Google Cloud Console */
+  "googleClientSecret": string
 }
 
 /** Preferences accessible in all the extension's commands */

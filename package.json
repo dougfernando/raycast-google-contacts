@@ -25,11 +25,20 @@
       "required": true,
       "title": "Google OAuth Client ID",
       "description": "Your Google OAuth 2.0 Client ID from Google Cloud Console"
+    },
+    {
+      "name": "googleClientSecret",
+      "type": "password",
+      "required": true,
+      "title": "Google OAuth Client Secret",
+      "description": "Your Google OAuth 2.0 Client Secret from Google Cloud Console"
     }
   ],
   "dependencies": {
-    "@raycast/api": "^1.64.0",
-    "googleapis": "^126.0.1"
+    "@googleapis/people": "^5.0.1",
+    "@raycast/api": "^1.101.1",
+    "@raycast/utils": "^2.2.0",
+    "google-auth-library": "^10.1.0"
   },
   "devDependencies": {
     "@raycast/eslint-config": "1.0.6",

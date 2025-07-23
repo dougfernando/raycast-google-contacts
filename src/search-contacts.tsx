@@ -5,7 +5,6 @@ import {
   List,
   showToast,
   Toast,
-  getPreferenceValues,
   Image,
 } from "@raycast/api";
 import { useState, useEffect } from "react";
@@ -13,17 +12,15 @@ import { authorize } from "./google-auth";
 import { ContactsService } from "./contacts-service";
 import { Contact } from "./types";
 
-interface Preferences {
-  googleClientId: string;
-}
-
 export default function SearchContacts() {
+  console.log("SEARCH-CONTACTS: Component started");
+
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
-  const preferences = getPreferenceValues<Preferences>();
 
   useEffect(() => {
+    console.log("SEARCH-CONTACTS: useEffect running");
     loadContacts();
   }, []);
 
@@ -37,14 +34,21 @@ export default function SearchContacts() {
 
   async function loadContacts() {
     try {
+      console.log("SEARCH-CONTACTS: loadContacts started");
       setIsLoading(true);
-      console.log("Starting authorization...");
+      console.log("SEARCH-CONTACTS: Starting OAuth authorization...");
+
       const accessToken = await authorize();
-      console.log("Authorization successful, creating contacts service...");
+      console.log(
+        "SEARCH-CONTACTS: Authorization successful, creating contacts service..."
+      );
+
       const contactsService = new ContactsService(accessToken);
-      console.log("Fetching contacts...");
+      console.log("SEARCH-CONTACTS: Fetching contacts...");
+
       const allContacts = await contactsService.getContacts();
       console.log(`Loaded ${allContacts.length} contacts`);
+
       setContacts(allContacts);
     } catch (error) {
       console.error("Error in loadContacts:", error);
@@ -60,12 +64,18 @@ export default function SearchContacts() {
 
   async function searchContacts(query: string) {
     try {
-      setIsLoading(true);
+      // setIsLoading(false);
+      console.log("Starting search with query:", query);
+
       const accessToken = await authorize();
+
       const contactsService = new ContactsService(accessToken);
       const searchResults = await contactsService.searchContacts(query);
+
+      console.log(`Found ${searchResults.length} contacts matching query`);
       setContacts(searchResults);
     } catch (error) {
+      console.error("Error in searchContacts:", error);
       showToast({
         style: Toast.Style.Failure,
         title: "Search failed",
@@ -93,11 +103,20 @@ export default function SearchContacts() {
 function ContactItem({ contact }: { contact: Contact }) {
   const primaryEmail = contact.emails[0]?.value;
   const primaryPhone = contact.phoneNumbers[0]?.value;
+  const primaryOrg = contact.organizations[0];
+  
+  let subtitle = primaryEmail || primaryPhone;
+  if (primaryOrg && primaryOrg.name) {
+    subtitle = primaryOrg.title ? `${primaryOrg.title} at ${primaryOrg.name}` : primaryOrg.name;
+    if (primaryEmail || primaryPhone) {
+      subtitle += ` • ${primaryEmail || primaryPhone}`;
+    }
+  }
 
   return (
     <List.Item
       title={contact.name}
-      subtitle={primaryEmail || primaryPhone}
+      subtitle={subtitle}
       icon={
         contact.photoUrl
           ? { source: contact.photoUrl, mask: Image.Mask.Circle }
@@ -134,12 +153,36 @@ function ContactDetails({ contact }: { contact: Contact }) {
   return (
     <List>
       <List.Section title="Contact Information">
-        <List.Item
-          title="Name"
-          subtitle={contact.name}
-          icon={Icon.Person}
+        <List.Item 
+          title="Name" 
+          subtitle={contact.name} 
+          icon={
+            contact.photoUrl
+              ? { source: contact.photoUrl, mask: Image.Mask.Circle }
+              : Icon.Person
+          }
         />
+        {contact.birthdays.length > 0 && (
+          <List.Item
+            title="Birthday"
+            subtitle={contact.birthdays[0].date || contact.birthdays[0].text || "Unknown"}
+            icon={Icon.Calendar}
+          />
+        )}
       </List.Section>
+
+      {contact.organizations.length > 0 && (
+        <List.Section title="Work">
+          {contact.organizations.map((org, index) => (
+            <List.Item
+              key={index}
+              title={org.title || "Position"}
+              subtitle={org.name}
+              icon={Icon.Building}
+            />
+          ))}
+        </List.Section>
+      )}
 
       {contact.emails.length > 0 && (
         <List.Section title="Email Addresses">
@@ -179,6 +222,56 @@ function ContactDetails({ contact }: { contact: Contact }) {
                   <Action.CopyToClipboard
                     title="Copy Phone Number"
                     content={phone.value}
+                  />
+                </ActionPanel>
+              }
+            />
+          ))}
+        </List.Section>
+      )}
+
+      {contact.addresses.length > 0 && (
+        <List.Section title="Addresses">
+          {contact.addresses.map((address, index) => (
+            <List.Item
+              key={index}
+              title={address.type || "Address"}
+              subtitle={address.formattedValue}
+              icon={Icon.Map}
+              actions={
+                <ActionPanel>
+                  <Action.CopyToClipboard
+                    title="Copy Address"
+                    content={address.formattedValue}
+                  />
+                  <Action.OpenInBrowser
+                    title="Open in Maps"
+                    url={`https://maps.google.com/maps?q=${encodeURIComponent(address.formattedValue)}`}
+                  />
+                </ActionPanel>
+              }
+            />
+          ))}
+        </List.Section>
+      )}
+
+      {contact.urls.length > 0 && (
+        <List.Section title="Websites">
+          {contact.urls.map((url, index) => (
+            <List.Item
+              key={index}
+              title={url.type || "Website"}
+              subtitle={url.value}
+              icon={Icon.Globe}
+              actions={
+                <ActionPanel>
+                  <Action.OpenInBrowser
+                    title="Open Website"
+                    url={url.value}
+                  />
+                  <Action.CopyToClipboard
+                    title="Copy URL"
+                    content={url.value}
                   />
                 </ActionPanel>
               }
