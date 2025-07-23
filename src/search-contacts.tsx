@@ -38,11 +38,16 @@ export default function SearchContacts() {
   async function loadContacts() {
     try {
       setIsLoading(true);
+      console.log("Starting authorization...");
       const accessToken = await authorize();
+      console.log("Authorization successful, creating contacts service...");
       const contactsService = new ContactsService(accessToken);
+      console.log("Fetching contacts...");
       const allContacts = await contactsService.getContacts();
+      console.log(`Loaded ${allContacts.length} contacts`);
       setContacts(allContacts);
     } catch (error) {
+      console.error("Error in loadContacts:", error);
       showToast({
         style: Toast.Style.Failure,
         title: "Failed to load contacts",

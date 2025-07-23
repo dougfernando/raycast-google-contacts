@@ -25,7 +25,9 @@ A Raycast extension to search and manage your Google Contacts directly from Rayc
    - Go to APIs & Services > Credentials
    - Click "Create Credentials" > "OAuth 2.0 Client IDs"
    - Choose "Web application" as the application type
-   - Add `https://raycast.com/redirect` to "Authorized redirect URIs"
+   - Add the following to "Authorized redirect URIs":
+     - `https://raycast.com/redirect`
+     - `raycast://oauth`
    - Save the Client ID
 
 ### 2. Extension Configuration
