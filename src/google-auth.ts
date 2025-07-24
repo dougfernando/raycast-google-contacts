@@ -44,16 +44,7 @@ export async function authorize(): Promise<string> {
       endpoint: "https://accounts.google.com/o/oauth2/v2/auth",
       clientId: clientId,
       scope: "https://www.googleapis.com/auth/contacts.readonly",
-      extraParameters: {
-        redirect_uri: "https://raycast.com/redirect/extension",
-      },
     });
-
-    // Add client ID to authRequest since it's not automatically included
-    (authRequest as any).clientId = clientId;
-    
-    // Ensure redirect URI is correctly set for token exchange
-    (authRequest as any).redirectURI = "https://raycast.com/redirect/extension";
 
     console.log("AUTH: Authorization request created, calling authorize...");
     console.log("AUTH: Auth URL being used:", authRequest.toURL ? authRequest.toURL() : "No URL available");
@@ -86,14 +77,14 @@ async function fetchTokens(
   params.append("code", authCode);
   params.append("code_verifier", request.codeVerifier);
   params.append("grant_type", "authorization_code");
-  params.append("redirect_uri", request.redirectURI);
+  params.append("redirect_uri", "https://raycast.com/redirect/extension");
 
   console.log("AUTH: Token exchange parameters:", {
     client_id: request.clientId ? "Present" : "Missing",
     client_secret: preferences.googleClientSecret ? "Present" : "Missing",
     code: authCode ? "Present" : "Missing",
     code_verifier: request.codeVerifier ? "Present" : "Missing",
-    redirect_uri: request.redirectURI,
+    redirect_uri: "https://raycast.com/redirect/extension",
   });
 
   const response = await fetch("https://oauth2.googleapis.com/token", {
