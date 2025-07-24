@@ -32,6 +32,15 @@
       "required": true,
       "title": "Google OAuth Client Secret",
       "description": "Your Google OAuth 2.0 Client Secret from Google Cloud Console"
+    },
+    {
+      "name": "useCache",
+      "type": "checkbox",
+      "required": false,
+      "label": "Cache contacts",
+      "title": "Use Caching",
+      "description": "Cache contacts to speed up loading times",
+      "default": true
     }
   ],
   "dependencies": {

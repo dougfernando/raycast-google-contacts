@@ -11,7 +11,9 @@ type ExtensionPreferences = {
   /** Google OAuth Client ID - Your Google OAuth 2.0 Client ID from Google Cloud Console */
   "googleClientId": string,
   /** Google OAuth Client Secret - Your Google OAuth 2.0 Client Secret from Google Cloud Console */
-  "googleClientSecret": string
+  "googleClientSecret": string,
+  /** Use Caching - Cache contacts to speed up loading times */
+  "useCache": boolean
 }
 
 /** Preferences accessible in all the extension's commands */
