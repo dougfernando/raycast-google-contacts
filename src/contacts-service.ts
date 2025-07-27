@@ -34,7 +34,7 @@ export class ContactsService {
       });
 
       return this.transformContacts(
-        response.data.results?.map((r) => r.person) || []
+        response.data.results?.map((r) => r.person).filter((p): p is people_v1.Schema$Person => !!p) || []
       );
     } catch (error) {
       console.error("Error searching contacts:", error);
@@ -62,11 +62,11 @@ export class ContactsService {
           person.addresses?.map((address) => ({
             formattedValue: address.formattedValue || "",
             type: address.type || "unknown",
-            streetAddress: address.streetAddress,
-            city: address.city,
-            region: address.region,
-            postalCode: address.postalCode,
-            country: address.country,
+            streetAddress: address.streetAddress || undefined,
+            city: address.city || undefined,
+            region: address.region || undefined,
+            postalCode: address.postalCode || undefined,
+            country: address.country || undefined,
           })) || [],
         organizations:
           person.organizations?.map((org) => ({

@@ -7,7 +7,7 @@ export interface Contact {
   organizations: Organization[];
   urls: Url[];
   birthdays: Birthday[];
-  photoUrl?: string;
+  photoUrl?: string | null;
 }
 
 export interface Email {
@@ -32,7 +32,7 @@ export interface Address {
 
 export interface Organization {
   name: string;
-  title?: string;
+  title?: string | null;
   type?: string;
 }
 
@@ -43,5 +43,5 @@ export interface Url {
 
 export interface Birthday {
   date: string;
-  text?: string;
+  text?: string | null;
 }
