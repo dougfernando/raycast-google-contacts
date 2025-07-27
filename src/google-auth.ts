@@ -19,6 +19,7 @@ export async function authorize(): Promise<string> {
   console.log("AUTH: Starting authorization...");
   const preferences = getPreferenceValues<Preferences>();
   const clientId = preferences.googleClientId;
+  console.log("Client ID: " + clientId);
 
   // Check for existing tokens first
   console.log("AUTH: Checking for existing tokens...");
@@ -72,19 +73,19 @@ async function fetchTokens(
 ): Promise<OAuth.TokenResponse> {
   const preferences = getPreferenceValues<Preferences>();
   const params = new URLSearchParams();
-  params.append("client_id", request.clientId);
+  params.append("client_id", preferences.googleClientId);
   params.append("client_secret", preferences.googleClientSecret);
   params.append("code", authCode);
   params.append("code_verifier", request.codeVerifier);
   params.append("grant_type", "authorization_code");
-  params.append("redirect_uri", "https://raycast.com/redirect/extension");
+  params.append("redirect_uri", "https://raycast.com/redirect?packageName=Extension");
 
   console.log("AUTH: Token exchange parameters:", {
-    client_id: request.clientId ? "Present" : "Missing",
+    client_id: preferences.googleClientId ? "Present" : "Missing",
     client_secret: preferences.googleClientSecret ? "Present" : "Missing",
     code: authCode ? "Present" : "Missing",
     code_verifier: request.codeVerifier ? "Present" : "Missing",
-    redirect_uri: "https://raycast.com/redirect/extension",
+    redirect_uri: "https://raycast.com/redirect?packageName=Extension",
   });
 
   const response = await fetch("https://oauth2.googleapis.com/token", {
