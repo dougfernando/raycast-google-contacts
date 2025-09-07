@@ -1,4 +1,3 @@
-import React from "react";
 import {
   Action,
   ActionPanel,
@@ -7,89 +6,111 @@ import {
   showToast,
   Toast,
   Image,
-  Cache,
-  LaunchProps,
   getPreferenceValues,
 } from "@raycast/api";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { authorize } from "./google-auth";
 import { ContactsService } from "./contacts-service";
 import { Contact } from "./types";
 
-const cache = new Cache();
-
 interface Preferences {
+  googleClientId: string;
+  googleClientSecret: string;
   useCache: boolean;
 }
 
-export default function SearchContacts(props: LaunchProps) {
+export default function SearchContacts() {
   console.log("SEARCH-CONTACTS: Component started");
 
-  const [allContacts, setAllContacts] = useState<Contact[]>([]);
+  const preferences = getPreferenceValues<Preferences>();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
 
-  const preferences = getPreferenceValues<Preferences>();
-
   useEffect(() => {
-    console.log("SEARCH-CONTACTS: initial load");
+    console.log("SEARCH-CONTACTS: useEffect running");
     loadContacts();
   }, []);
 
   useEffect(() => {
     if (searchText) {
-      setIsLoading(true);
-      const searchResults = allContacts.filter((contact) => {
-        const nameMatch = contact.name.toLowerCase().includes(searchText.toLowerCase());
-        const emailMatch = contact.emails.some((e) => e.value.toLowerCase().includes(searchText.toLowerCase()));
-        const phoneMatch = contact.phoneNumbers.some((p) => p.value.toLowerCase().includes(searchText.toLowerCase()));
-        return nameMatch || emailMatch || phoneMatch;
-      });
-      setContacts(searchResults);
-      setIsLoading(false);
+      searchContacts(searchText);
     } else {
-      setContacts(allContacts);
+      loadContacts();
     }
-  }, [searchText, allContacts]);
+  }, [searchText]);
 
   async function loadContacts(forceRefresh = false) {
     try {
       console.log("SEARCH-CONTACTS: loadContacts started");
       setIsLoading(true);
-
-      if (preferences.useCache && !forceRefresh) {
-        const cachedContacts = cache.get("contacts");
-        if (cachedContacts) {
-          console.log("SEARCH-CONTACTS: Loading contacts from cache");
-          const parsedContacts = JSON.parse(cachedContacts);
-          setAllContacts(parsedContacts);
-          setContacts(parsedContacts);
-          setIsLoading(false);
-          return;
-        }
-      }
-
       console.log("SEARCH-CONTACTS: Starting OAuth authorization...");
+
       const accessToken = await authorize();
-      console.log("SEARCH-CONTACTS: Authorization successful, creating contacts service...");
+      console.log(
+        "SEARCH-CONTACTS: Authorization successful, creating contacts service..."
+      );
 
       const contactsService = new ContactsService(accessToken);
       console.log("SEARCH-CONTACTS: Fetching contacts...");
 
-      const fetchedContacts = await contactsService.getContacts();
-      console.log(`Loaded ${fetchedContacts.length} contacts`);
+      const useCache = preferences.useCache && !forceRefresh;
+      const allContacts = await contactsService.getContacts(useCache);
+      console.log(`Loaded ${allContacts.length} contacts`);
 
-      if (preferences.useCache) {
-        cache.set("contacts", JSON.stringify(fetchedContacts));
-      }
-      setAllContacts(fetchedContacts);
-      setContacts(fetchedContacts);
+      setContacts(allContacts);
     } catch (error) {
       console.error("Error in loadContacts:", error);
       showToast({
         style: Toast.Style.Failure,
         title: "Failed to load contacts",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function refreshContacts() {
+    try {
+      const accessToken = await authorize();
+      const contactsService = new ContactsService(accessToken);
+      contactsService.clearCache();
+      
+      showToast({
+        style: Toast.Style.Success,
+        title: "Cache cleared",
+        message: "Refreshing contacts...",
+      });
+      
+      await loadContacts(true);
+    } catch (error) {
+      console.error("Error refreshing contacts:", error);
+      showToast({
+        style: Toast.Style.Failure,
+        title: "Failed to refresh",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  async function searchContacts(query: string) {
+    try {
+      // setIsLoading(false);
+      console.log("Starting search with query:", query);
+
+      const accessToken = await authorize();
+
+      const contactsService = new ContactsService(accessToken);
+      const searchResults = await contactsService.searchContacts(query);
+
+      console.log(`Found ${searchResults.length} contacts matching query`);
+      setContacts(searchResults);
+    } catch (error) {
+      console.error("Error in searchContacts:", error);
+      showToast({
+        style: Toast.Style.Failure,
+        title: "Search failed",
         message: error instanceof Error ? error.message : "Unknown error",
       });
     } finally {
@@ -103,15 +124,25 @@ export default function SearchContacts(props: LaunchProps) {
       onSearchTextChange={setSearchText}
       searchBarPlaceholder="Search contacts..."
       throttle
+      actions={
+        <ActionPanel>
+          <Action
+            title="Refresh Contacts"
+            icon={Icon.ArrowClockwise}
+            onAction={refreshContacts}
+            shortcut={{ modifiers: ["cmd"], key: "r" }}
+          />
+        </ActionPanel>
+      }
     >
       {contacts.map((contact) => (
-        <ContactItem key={contact.id} contact={contact} onRefresh={() => loadContacts(true)} />
+        <ContactItem key={contact.id} contact={contact} refreshContacts={refreshContacts} />
       ))}
     </List>
   );
 }
 
-function ContactItem({ contact, onRefresh }: { contact: Contact, onRefresh: () => void }) {
+function ContactItem({ contact, refreshContacts }: { contact: Contact; refreshContacts: () => void }) {
   const primaryEmail = contact.emails[0]?.value;
   const primaryPhone = contact.phoneNumbers[0]?.value;
   const primaryOrg = contact.organizations[0];
@@ -141,13 +172,6 @@ function ContactItem({ contact, onRefresh }: { contact: Contact, onRefresh: () =
             target={<ContactDetails contact={contact} />}
           />
           {primaryEmail && (
-            <Action.CopyToClipboard
-              title="Copy Email"
-              content={primaryEmail}
-              icon={Icon.Envelope}
-            />
-          )}
-          {primaryEmail && (
             <Action.OpenInBrowser
               title="Send Email"
               url={`mailto:${primaryEmail}`}
@@ -162,10 +186,10 @@ function ContactItem({ contact, onRefresh }: { contact: Contact, onRefresh: () =
             />
           )}
           <Action
-            title="Force Refresh"
-            icon={Icon.RotateClockwise}
-            onAction={onRefresh}
-            shortcut={{ modifiers: ["ctrl"], key: "k" }}
+            title="Refresh Contacts"
+            icon={Icon.ArrowClockwise}
+            onAction={refreshContacts}
+            shortcut={{ modifiers: ["cmd"], key: "r" }}
           />
         </ActionPanel>
       }

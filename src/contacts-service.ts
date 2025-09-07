@@ -1,16 +1,40 @@
 import { people_v1 } from "@googleapis/people";
+import { Cache } from "@raycast/api";
 import { Contact } from "./types";
 import { createPeopleService } from "./google-auth";
 
 export class ContactsService {
   private peopleService: people_v1.People;
+  private cache: Cache;
+  private static readonly CACHE_KEY = "google-contacts";
+  private static readonly CACHE_EXPIRY = 30 * 60 * 1000; // 30 minutes
 
   constructor(accessToken: string) {
     this.peopleService = createPeopleService(accessToken);
+    this.cache = new Cache();
   }
 
-  async getContacts(): Promise<Contact[]> {
+  async getContacts(useCache: boolean = true): Promise<Contact[]> {
+    if (useCache) {
+      const cachedData = this.cache.get(ContactsService.CACHE_KEY);
+      if (cachedData) {
+        try {
+          const parsed = JSON.parse(cachedData);
+          const cacheTime = new Date(parsed.timestamp).getTime();
+          const now = new Date().getTime();
+          
+          if (now - cacheTime < ContactsService.CACHE_EXPIRY) {
+            console.log("Using cached contacts");
+            return parsed.contacts;
+          }
+        } catch (error) {
+          console.warn("Failed to parse cached contacts:", error);
+        }
+      }
+    }
+
     try {
+      console.log("Fetching fresh contacts from API");
       const response = await this.peopleService.people.connections.list({
         resourceName: "people/me",
         personFields: "names,emailAddresses,phoneNumbers,photos,addresses,organizations,urls,birthdays",
@@ -18,7 +42,16 @@ export class ContactsService {
         sortOrder: "FIRST_NAME_ASCENDING",
       });
 
-      return this.transformContacts(response.data.connections || []);
+      const contacts = this.transformContacts(response.data.connections || []);
+      
+      if (useCache) {
+        this.cache.set(ContactsService.CACHE_KEY, JSON.stringify({
+          contacts,
+          timestamp: new Date().toISOString()
+        }));
+      }
+
+      return contacts;
     } catch (error) {
       console.error("Error fetching contacts:", error);
       throw new Error("Failed to fetch contacts");
@@ -40,6 +73,11 @@ export class ContactsService {
       console.error("Error searching contacts:", error);
       throw new Error("Failed to search contacts");
     }
+  }
+
+  clearCache(): void {
+    this.cache.remove(ContactsService.CACHE_KEY);
+    console.log("Cache cleared");
   }
 
   private transformContacts(people: people_v1.Schema$Person[]): Contact[] {
