@@ -25,56 +25,76 @@ export default function SearchContacts() {
   const preferences = getPreferenceValues<Preferences>();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchText, setSearchText] = useState("");
 
   useEffect(() => {
     console.log("SEARCH-CONTACTS: useEffect running");
     loadContacts();
   }, []);
 
-  useEffect(() => {
-    if (searchText) {
-      searchContacts(searchText);
-    } else {
-      loadContacts();
-    }
-  }, [searchText]);
-
   async function loadContacts(forceRefresh = false) {
     try {
       console.log("SEARCH-CONTACTS: loadContacts started");
       setIsLoading(true);
-      console.log("SEARCH-CONTACTS: Starting OAuth authorization...");
 
-      const accessToken = await authorize();
-      console.log(
-        "SEARCH-CONTACTS: Authorization successful, creating contacts service..."
-      );
-
-      const contactsService = new ContactsService(accessToken);
+      const contactsService = new ContactsService();
       console.log("SEARCH-CONTACTS: Fetching contacts...");
 
       const useCache = preferences.useCache && !forceRefresh;
-      const allContacts = await contactsService.getContacts(useCache);
-      console.log(`Loaded ${allContacts.length} contacts`);
+      const fetchedContacts = await contactsService.getContacts(useCache);
+      console.log(`Loaded ${fetchedContacts.length} contacts`);
 
-      setContacts(allContacts);
+      setContacts(fetchedContacts);
     } catch (error) {
       console.error("Error in loadContacts:", error);
+      
+      // Provide more helpful error messages
+      let errorMessage = "Unknown error";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        if (error.message.includes("OAuth credentials not configured")) {
+          errorMessage = "Please configure your Google OAuth credentials in preferences";
+        } else if (error.message.includes("authentication")) {
+          errorMessage = "Authentication failed. Please try again";
+        }
+      }
+      
       showToast({
         style: Toast.Style.Failure,
         title: "Failed to load contacts",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: errorMessage,
       });
     } finally {
       setIsLoading(false);
     }
   }
 
+  async function debugAuth() {
+    try {
+      showToast({
+        style: Toast.Style.Animated,
+        title: "Checking authentication...",
+      });
+
+      const token = await authorize();
+      
+      showToast({
+        style: Toast.Style.Success,
+        title: "Authentication successful",
+        message: `Token obtained (${token.substring(0, 10)}...)`,
+      });
+    } catch (error) {
+      console.error("Debug auth error:", error);
+      showToast({
+        style: Toast.Style.Failure,
+        title: "Authentication failed",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
   async function refreshContacts() {
     try {
-      const accessToken = await authorize();
-      const contactsService = new ContactsService(accessToken);
+      const contactsService = new ContactsService();
       contactsService.clearCache();
       
       showToast({
@@ -94,36 +114,12 @@ export default function SearchContacts() {
     }
   }
 
-  async function searchContacts(query: string) {
-    try {
-      // setIsLoading(false);
-      console.log("Starting search with query:", query);
-
-      const accessToken = await authorize();
-
-      const contactsService = new ContactsService(accessToken);
-      const searchResults = await contactsService.searchContacts(query);
-
-      console.log(`Found ${searchResults.length} contacts matching query`);
-      setContacts(searchResults);
-    } catch (error) {
-      console.error("Error in searchContacts:", error);
-      showToast({
-        style: Toast.Style.Failure,
-        title: "Search failed",
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }
 
   return (
     <List
       isLoading={isLoading}
-      onSearchTextChange={setSearchText}
       searchBarPlaceholder="Search contacts..."
-      throttle
+      filtering
       actions={
         <ActionPanel>
           <Action
@@ -131,6 +127,12 @@ export default function SearchContacts() {
             icon={Icon.ArrowClockwise}
             onAction={refreshContacts}
             shortcut={{ modifiers: ["cmd"], key: "r" }}
+          />
+          <Action
+            title="Debug Authentication"
+            icon={Icon.Bug}
+            onAction={debugAuth}
+            shortcut={{ modifiers: ["cmd", "shift"], key: "d" }}
           />
         </ActionPanel>
       }
@@ -155,10 +157,20 @@ function ContactItem({ contact, refreshContacts }: { contact: Contact; refreshCo
     }
   }
 
+  // Create searchable keywords for Raycast's fuzzy finder
+  const keywords = [
+    contact.name,
+    ...contact.emails.map(email => email.value),
+    ...contact.phoneNumbers.map(phone => phone.value),
+    ...contact.organizations.map(org => [org.name, org.title].filter(Boolean)).flat(),
+    ...contact.addresses.map(addr => addr.formattedValue),
+  ].filter(Boolean).join(' ');
+
   return (
     <List.Item
       title={contact.name}
       subtitle={subtitle}
+      keywords={[keywords]}
       icon={
         contact.photoUrl
           ? { source: contact.photoUrl, mask: Image.Mask.Circle }

@@ -62,3 +62,23 @@ temp/
 # Optional eslint cache
 .eslintcache
 .claude/settings.local.json
+
+# Project files to exclude
+CLAUDE.md
+TERRAFORM_README.md
+main.tf
+project-info.json
+terraform.tfvars.example
+variables.tf
+versions.tf
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+terraform.tfstate.*.backup
+
+# OAuth credentials and secrets
+client_secret_*.json
+New Text Document.txt

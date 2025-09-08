@@ -1,17 +1,31 @@
 import { people_v1 } from "@googleapis/people";
 import { Cache } from "@raycast/api";
 import { Contact } from "./types";
-import { createPeopleService } from "./google-auth";
+import { createPeopleService, authorize, withAuthRetry, setCurrentContactsService } from "./google-auth";
 
 export class ContactsService {
-  private peopleService: people_v1.People;
+  private peopleService: people_v1.People | null = null;
   private cache: Cache;
   private static readonly CACHE_KEY = "google-contacts";
   private static readonly CACHE_EXPIRY = 30 * 60 * 1000; // 30 minutes
 
-  constructor(accessToken: string) {
-    this.peopleService = createPeopleService(accessToken);
+  constructor() {
     this.cache = new Cache();
+    setCurrentContactsService(this);
+  }
+
+  private async ensureAuthenticated(): Promise<people_v1.People> {
+    if (!this.peopleService) {
+      const accessToken = await authorize();
+      this.peopleService = createPeopleService(accessToken);
+    }
+    return this.peopleService;
+  }
+
+  async refreshService(): Promise<people_v1.People> {
+    const accessToken = await authorize();
+    this.peopleService = createPeopleService(accessToken);
+    return this.peopleService;
   }
 
   async getContacts(useCache: boolean = true): Promise<Contact[]> {
@@ -33,9 +47,11 @@ export class ContactsService {
       }
     }
 
-    try {
+    return await withAuthRetry(async () => {
       console.log("Fetching fresh contacts from API");
-      const response = await this.peopleService.people.connections.list({
+      const service = await this.ensureAuthenticated();
+      
+      const response = await service.people.connections.list({
         resourceName: "people/me",
         personFields: "names,emailAddresses,phoneNumbers,photos,addresses,organizations,urls,birthdays",
         pageSize: 1000,
@@ -52,15 +68,14 @@ export class ContactsService {
       }
 
       return contacts;
-    } catch (error) {
-      console.error("Error fetching contacts:", error);
-      throw new Error("Failed to fetch contacts");
-    }
+    });
   }
 
   async searchContacts(query: string): Promise<Contact[]> {
-    try {
-      const response = await this.peopleService.people.searchContacts({
+    return await withAuthRetry(async () => {
+      const service = await this.ensureAuthenticated();
+      
+      const response = await service.people.searchContacts({
         query,
         readMask: "names,emailAddresses,phoneNumbers,photos,addresses,organizations,urls,birthdays",
         pageSize: 50,
@@ -69,10 +84,7 @@ export class ContactsService {
       return this.transformContacts(
         response.data.results?.map((r) => r.person).filter((p): p is people_v1.Schema$Person => !!p) || []
       );
-    } catch (error) {
-      console.error("Error searching contacts:", error);
-      throw new Error("Failed to search contacts");
-    }
+    });
   }
 
   clearCache(): void {
