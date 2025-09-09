@@ -7,7 +7,7 @@ export class ContactsService {
   private peopleService: people_v1.People | null = null;
   private cache: Cache;
   private static readonly CACHE_KEY = "google-contacts";
-  private static readonly CACHE_EXPIRY = 30 * 60 * 1000; // 30 minutes
+  private static readonly CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24h cache 
 
   constructor() {
     this.cache = new Cache();
